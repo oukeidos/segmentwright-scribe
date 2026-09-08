@@ -3,6 +3,9 @@ name = "segmentwright-scribe"
 version = "0.1.0"
 description = "Generate Segmentwright-compatible transcript chunk JSON through OpenRouter ASR."
 readme = "README.md"
+authors = [{name = "oukeidos"}]
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fireredvad",
@@ -23,7 +26,7 @@ dev = [
 segmentwright-scribe = "segmentwright_scribe.cli:main"
 
 [build-system]
-requires = ["setuptools>=69.0"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

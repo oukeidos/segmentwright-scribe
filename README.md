@@ -184,3 +184,11 @@ leave generated lock and package metadata files to those tools.
 
 See [CHANGELOG.md](CHANGELOG.md) for releases and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party components and licenses.
+
+## License
+
+Segmentwright Scribe is licensed under the [MIT License](LICENSE).
+Copyright (c) 2026 oukeidos.
+
+Third-party dependencies, model files, and external tools retain their own
+licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
