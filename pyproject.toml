@@ -1,6 +1,6 @@
 [project]
 name = "segmentwright-scribe"
-version = "0.1.0"
+version = "0.2.0"
 description = "Generate Segmentwright-compatible transcript chunk JSON through OpenRouter ASR."
 readme = "README.md"
 authors = [{name = "oukeidos"}]

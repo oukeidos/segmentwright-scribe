@@ -131,7 +131,48 @@ def test_missing_api_key_fails_clearly(tmp_path: Path, monkeypatch: pytest.Monke
 
 def test_parser_selects_new_default_and_allows_previous_model():
     parser = build_parser()
-    assert parser.parse_args(["input.wav", "out.json"]).model == "microsoft/mai-transcribe-2"
-    assert parser.parse_args([
-        "input.wav", "out.json", "--model", "microsoft/mai-transcribe-1.5"
-    ]).model == "microsoft/mai-transcribe-1.5"
+    assert parser.parse_args(["input.wav", "out.json"]).model is None
+    assert (
+        parser.parse_args(
+            ["input.wav", "out.json", "--model", "microsoft/mai-transcribe-1.5"]
+        ).model
+        == "microsoft/mai-transcribe-1.5"
+    )
+
+
+def test_preset_selection_and_conflict(tmp_path):
+    config = build_config(make_args(tmp_path, model=None, preset="mai-transcribe-2"))
+    assert config.model == "microsoft/mai-transcribe-2"
+    assert config.preset == "mai-transcribe-2"
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            [
+                "in.wav",
+                "out.json",
+                "--preset",
+                "mai-transcribe-2",
+                "--model",
+                "microsoft/mai-transcribe-2",
+            ]
+        )
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["in.wav", "out.json", "--preset", "unknown"])
+
+
+def test_list_presets_needs_no_files_or_credentials(capsys):
+    with pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(["--list-presets"])
+    assert exc.value.code == 0
+    assert "mai-transcribe-2" in capsys.readouterr().out
+
+
+def test_scribe_preset_resolves_model(tmp_path):
+    config = build_config(make_args(tmp_path, model=None, preset="scribe-v2"))
+    assert config.model == "elevenlabs/scribe-v2"
+    assert config.preset == "scribe-v2"
+
+
+def test_qwen_preset_resolves_model(tmp_path):
+    config = build_config(make_args(tmp_path, model=None, preset="qwen-3.8-omni-flash"))
+    assert config.model == "qwen/qwen3.8-omni-flash"
+    assert config.preset == "qwen-3.8-omni-flash"

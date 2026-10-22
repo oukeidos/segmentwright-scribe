@@ -81,6 +81,22 @@ server metadata and automatically selects the API:
 
 Model discovery requires network access, including when using cached transcripts.
 
+Use `--preset NAME` for model-specific transcription and line breaks:
+
+| Preset | Output |
+| --- | --- |
+| `mai-transcribe-2` | Verbatim transcription, one line per server segment. |
+| `scribe-v2` | Original text with newlines at speaker changes. |
+| `qwen-3.8-omni-flash` | Subtitle-style lines, preserving returned text and line breaks. |
+
+```bash
+uv run segmentwright-scribe --list-presets
+uv run segmentwright-scribe input.mp4 output.json --preset mai-transcribe-2 --language ja
+```
+
+`--preset` and `--model` are mutually exclusive. Omitting both uses MAI without
+preset options. Segmentwright handles further splitting and alignment.
+
 ## Create Subtitles with Segmentwright
 
 Pass the JSON and the **same media file** to your Segmentwright installation.
@@ -148,6 +164,8 @@ Usage: `segmentwright-scribe INPUT OUTPUT [OPTIONS]`.
 | --- | --- | --- |
 | `--version` | — | Print the installed package version and exit. No inputs or API key required. |
 | `--language {en,ja}` | `ja` | Language hint sent to the ASR model. |
+| `--preset PRESET` | None | Model-specific transcription options and line formatting; excludes `--model`. |
+| `--list-presets` | — | List available presets and exit. |
 | `--model MODEL` | `microsoft/mai-transcribe-2` | OpenRouter audio-input model ID; route discovered automatically. |
 | `--artifacts ARTIFACTS` | `artifacts/<input-stem>-<timestamp>` | Directory for run artifacts. |
 | `--env-file ENV_FILE` | `~/.segmentwright-scribe/.env` | Dotenv file used after process environment lookup. |

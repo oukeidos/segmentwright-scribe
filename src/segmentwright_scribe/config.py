@@ -23,6 +23,7 @@ from .defaults import (
     SUPPORTED_INPUT_EXTENSIONS,
     SUPPORTED_LANGUAGES,
 )
+from .presets import PRESETS
 
 
 class ConfigError(ValueError):
@@ -51,6 +52,15 @@ class AppConfig:
     cache_enabled: bool
     overwrite: bool
     verbose: bool
+    preset: str | None = None
+
+
+class ListPresetsAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        print("PRESET             MODEL                        DESCRIPTION")
+        for name, preset in PRESETS.items():
+            print(f"{name:<18} {preset.model:<28} {preset.description}")
+        parser.exit()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -93,10 +103,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_LANGUAGE,
         help="Language hint sent to the ASR model.",
     )
+    selection = optional.add_mutually_exclusive_group()
+    selection.add_argument("--preset", choices=sorted(PRESETS), help="Model optimization preset.")
     optional.add_argument(
+        "--list-presets",
+        action=ListPresetsAction,
+        nargs=0,
+        help="List presets and exit without input files or credentials.",
+    )
+    selection.add_argument(
         "--model",
-        default=DEFAULT_MODEL,
-        help="OpenRouter audio-input model id; endpoint discovered from server metadata.",
+        default=None,
+        help=f"OpenRouter audio-input model id (default: {DEFAULT_MODEL}); auto-detected API.",
     )
     optional.add_argument(
         "--artifacts",
@@ -190,6 +208,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def build_config(args: argparse.Namespace, *, now: datetime | None = None) -> AppConfig:
+    preset = getattr(args, "preset", None)
+    if preset and args.model is not None:
+        raise ConfigError("--preset and --model cannot be used together")
+    if preset and preset not in PRESETS:
+        raise ConfigError(f"Unknown preset: {preset}")
     input_path = normalize_path(args.input)
     output_path = normalize_path(args.output)
     artifacts_dir = (
@@ -204,7 +227,10 @@ def build_config(args: argparse.Namespace, *, now: datetime | None = None) -> Ap
         artifacts_dir=artifacts_dir,
         env_file=normalize_path(args.env_file),
         language=args.language,
-        model=args.model,
+        model=PRESETS[preset].model
+        if preset
+        else (args.model if args.model is not None else DEFAULT_MODEL),
+        preset=preset,
         openrouter_base_url=args.openrouter_base_url.rstrip("/"),
         openrouter_api_key_env=args.openrouter_api_key_env,
         firered_vad_model_dir=normalize_path(args.firered_vad_model_dir),

@@ -80,6 +80,7 @@ def test_transcribe_chunks_writes_call_artifact_and_output_chunk(tmp_path: Path)
             "confidence": None,
             "metadata": {
                 "model": "microsoft/mai-transcribe-2",
+                "preset": None,
                 "call_artifact": "openrouter_calls/chunk_0001.json",
                 "cache_hit": False,
                 "planner_chunk_id": "1",
@@ -119,7 +120,7 @@ class FakeTranscriber:
     def resolve_model(self, model, timeout_sec):
         return {"endpoint": "/audio/transcriptions", "model": {"id": model}}
 
-    def request_profile(self, model, language, timeout_sec):
+    def request_profile(self, model, language, timeout_sec, preset=None):
         return "test-profile"
 
     def transcribe(self, request: Any) -> AsrResult:

@@ -10,7 +10,8 @@ from typing import Any
 
 import httpx
 
-from .prompts import NO_SPEECH, PLAIN_PROMPTS
+from .presets import PRESETS
+from .prompts import NO_SPEECH, PLAIN_PROMPTS, SUBTITLE_LINES_PROMPTS
 
 
 class OpenRouterError(RuntimeError):
@@ -24,6 +25,7 @@ class AsrRequest:
     model: str
     language: str
     timeout_sec: float
+    preset: str | None = None
 
 
 @dataclass(frozen=True)
@@ -105,17 +107,26 @@ class OpenRouterTranscriber:
             raise OpenRouterError(f"Model has no supported transcription/text output: {model}")
         return {"endpoint": endpoint, "model": metadata}
 
-    def request_profile(self, model: str, language: str, timeout_sec: float) -> str:
+    def request_profile(
+        self, model: str, language: str, timeout_sec: float, preset: str | None = None
+    ) -> str:
         route = self.resolve_model(model, timeout_sec)
+        selected = validate_preset(preset, model, route["endpoint"]) if preset else None
         profile = {
             "endpoint": route["endpoint"],
-            "prompt": PLAIN_PROMPTS[language] if route["endpoint"] == "/chat/completions" else None,
+            "prompt": chat_prompt(language, preset)
+            if route["endpoint"] == "/chat/completions"
+            else None,
             "version": 1,
         }
+        if selected:
+            profile.update(options=selected.options(), output_version=selected.output_version)
         return hashlib.sha256(json.dumps(profile, sort_keys=True).encode()).hexdigest()
 
     def transcribe(self, request: AsrRequest) -> AsrResult:
         route = self.resolve_model(request.model, request.timeout_sec)
+        if request.preset:
+            validate_preset(request.preset, request.model, route["endpoint"])
         started = time.monotonic()
         last_error: Exception | None = None
         attempts = self.max_retries + 1
@@ -158,10 +169,23 @@ class OpenRouterTranscriber:
                     text = message["content"]
                     if not text.strip():
                         raise OpenRouterError("Chat response contains empty text")
-                    if text.strip() == NO_SPEECH[request.language]:
+                    if (
+                        request.preset
+                        and PRESETS[request.preset].output_mode == "json_string_lines"
+                    ):
+                        text = json_string_lines(text)
+                    elif text.strip() == NO_SPEECH[request.language]:
                         text = ""
                 else:
-                    text = extract_response_text(data)
+                    if request.preset:
+                        mode = PRESETS[request.preset].output_mode
+                        text = (
+                            speaker_word_lines(data)
+                            if mode == "speaker_words"
+                            else segment_lines(data)
+                        )
+                    else:
+                        text = extract_response_text(data)
                 return AsrResult(
                     request_id=request.request_id,
                     text=text,
@@ -188,12 +212,13 @@ class OpenRouterTranscriber:
 def build_payload(
     request: AsrRequest, *, endpoint: str = "/audio/transcriptions"
 ) -> dict[str, Any]:
+    selected = validate_preset(request.preset, request.model, endpoint) if request.preset else None
     audio_bytes = request.audio_path.read_bytes()
     if endpoint == "/chat/completions":
-        return {
+        payload = {
             "model": request.model,
             "messages": [
-                {"role": "system", "content": PLAIN_PROMPTS[request.language]},
+                {"role": "system", "content": chat_prompt(request.language, request.preset)},
                 {
                     "role": "user",
                     "content": [
@@ -209,9 +234,12 @@ def build_payload(
                 },
             ],
         }
+        if selected:
+            payload.update(selected.options())
+        return payload
     if endpoint != "/audio/transcriptions":
         raise OpenRouterError(f"Unsupported endpoint: {endpoint}")
-    return {
+    payload = {
         "model": request.model,
         "input_audio": {
             "data": base64.b64encode(audio_bytes).decode("ascii"),
@@ -219,6 +247,102 @@ def build_payload(
         },
         "language": request.language,
     }
+
+    if request.preset:
+        payload.update(validate_preset(request.preset, request.model, endpoint).options())
+    return payload
+
+
+def validate_preset(name, model, endpoint):
+    preset = PRESETS.get(name)
+    if preset is None or preset.model != model:
+        raise OpenRouterError(f"Preset/model mismatch: {name} / {model}")
+    expected = (
+        "/chat/completions"
+        if preset.output_mode == "json_string_lines"
+        else "/audio/transcriptions"
+    )
+    if endpoint != expected:
+        raise OpenRouterError(f"Preset requires {expected} capabilities in server metadata")
+    return preset
+
+
+def chat_prompt(language: str, preset: str | None) -> str:
+    prompts = (
+        SUBTITLE_LINES_PROMPTS
+        if preset and PRESETS[preset].output_mode == "json_string_lines"
+        else PLAIN_PROMPTS
+    )
+    return prompts[language]
+
+
+def json_string_lines(raw: str) -> str:
+    """Validate the JSON contract and join lines without rewriting any string."""
+    try:
+        data = json.loads(raw)
+    except ValueError as exc:
+        raise OpenRouterError("Preset requires valid JSON string lines") from exc
+    if not isinstance(data, dict) or set(data) != {"lines"} or not isinstance(data["lines"], list):
+        raise OpenRouterError("Preset requires an object containing only a lines array")
+    if any(
+        not isinstance(line, str) or not line.strip() or "\n" in line or "\r" in line
+        for line in data["lines"]
+    ):
+        raise OpenRouterError("Preset requires nonempty single-line strings")
+    return "\n".join(data["lines"])
+
+
+def speaker_word_lines(data: dict[str, Any]) -> str:
+    """Insert only newlines; retain every original character and whitespace."""
+    text, words = data.get("text"), data.get("words")
+    if not isinstance(text, str) or not isinstance(words, list):
+        raise OpenRouterError("Preset requires text and words in the response")
+    positions = [i for i, char in enumerate(text) if not char.isspace()]
+    source = "".join(text.split())
+    cursor = 0
+    previous = None
+    boundaries = []
+    for word in words:
+        if not isinstance(word, dict) or not isinstance(word.get("word"), str):
+            raise OpenRouterError("Preset received an invalid word")
+        token = "".join(word["word"].split())
+        if not token:
+            continue
+        speaker = word.get("speaker")
+        if speaker is None:
+            raise OpenRouterError("Preset requires a speaker label for every nonempty word")
+        if source[cursor : cursor + len(token)] != token:
+            raise OpenRouterError("Word text differs from the full transcript")
+        if previous is not None and speaker != previous:
+            boundaries.append(positions[cursor])
+        cursor += len(token)
+        previous = speaker
+    if cursor != len(source):
+        raise OpenRouterError("Words do not cover the full transcript")
+    for position in reversed(boundaries):
+        text = text[:position] + "\n" + text[position:]
+    return text
+
+
+def segment_lines(data: dict[str, Any]) -> str:
+    segments = data.get("segments")
+    full_text = data.get("text")
+    if not isinstance(segments, list) or not isinstance(full_text, str):
+        raise OpenRouterError("Preset requires text and segments in the response")
+    lines = []
+    for segment in segments:
+        if not isinstance(segment, dict) or not isinstance(segment.get("text"), str):
+            raise OpenRouterError("Preset received an invalid segment")
+        text = " ".join(segment["text"].split())
+        if not text:
+            continue
+        if segment.get("speaker") is None:
+            raise OpenRouterError("Preset requires a speaker label for every nonempty segment")
+        lines.append(text)
+    result = "\n".join(lines)
+    if "".join(result.split()) != "".join(full_text.split()):
+        raise OpenRouterError("Segment text differs from the full transcript")
+    return result
 
 
 def extract_response_text(data: dict[str, Any]) -> str:

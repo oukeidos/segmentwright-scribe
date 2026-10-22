@@ -116,6 +116,7 @@ def _run_pipeline(config: AppConfig) -> None:
         "producer": "segmentwright-scribe",
         "backend": "openrouter",
         "model": config.model,
+        "preset": config.preset,
         "source_id": source_id,
         "input_path": str(config.input_path),
         "artifacts_dir": str(config.artifacts_dir),
@@ -145,6 +146,7 @@ def _run_pipeline(config: AppConfig) -> None:
             "artifacts_dir": str(config.artifacts_dir),
             "chunk_count": len(transcript_chunks),
             "model": config.model,
+            "preset": config.preset,
             "language": config.language,
         },
     )
@@ -159,7 +161,9 @@ def transcribe_chunks(
     transcriber: OpenRouterTranscriber,
 ) -> list[dict[str, Any]]:
     route = transcriber.resolve_model(config.model, config.timeout_sec or 60.0)
-    profile = transcriber.request_profile(config.model, config.language, config.timeout_sec or 60.0)
+    profile = transcriber.request_profile(
+        config.model, config.language, config.timeout_sec or 60.0, preset=config.preset
+    )
     write_json(config.artifacts_dir / "model_route.json", route)
     output: list[dict[str, Any]] = []
     calls_dir = config.artifacts_dir / "openrouter_calls"
@@ -202,6 +206,7 @@ def transcribe_chunks(
                 model=config.model,
                 language=config.language,
                 timeout_sec=timeout_for_chunk(config, chunk),
+                preset=config.preset,
             )
             result = transcriber.transcribe(request)
             text = result.text
@@ -242,6 +247,7 @@ def transcribe_chunks(
                 "confidence": None,
                 "metadata": {
                     "model": config.model,
+                    "preset": config.preset,
                     "call_artifact": str(call_path.relative_to(config.artifacts_dir)),
                     "cache_hit": cached is not None,
                     "planner_chunk_id": chunk.chunk_id,
@@ -272,6 +278,7 @@ def request_metadata(*, config: AppConfig, public_id: str) -> dict[str, Any]:
     return {
         "request_id": public_id,
         "model": config.model,
+        "preset": config.preset,
         "language": config.language,
         "base_url": config.openrouter_base_url,
         "api_key_env": config.openrouter_api_key_env,
@@ -301,6 +308,7 @@ def build_run_config(config: AppConfig) -> dict[str, Any]:
         "env_file": str(config.env_file),
         "language": config.language,
         "model": config.model,
+        "preset": config.preset,
         "openrouter_base_url": config.openrouter_base_url,
         "openrouter_api_key_env": config.openrouter_api_key_env,
         "firered_vad_model_dir": str(config.firered_vad_model_dir),
