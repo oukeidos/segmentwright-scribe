@@ -71,7 +71,15 @@ uv run segmentwright-scribe input.mp4 runs/example/transcript_chunks.json \
 
 Cache is enabled by default. Reuse the same `--cache-dir` across runs to reuse
 cached transcripts, or add `--no-cache` to request fresh transcriptions.
-Use `--model MODEL_ID` to select another audio transcription model on OpenRouter.
+
+Use `--model MODEL_ID` to choose an OpenRouter audio-input model. Scribe checks
+server metadata and automatically selects the API:
+
+- **ASR models:** transcription API, without a prompt.
+- **Multimodal LLMs:** chat API, with Segmentwright's English/Japanese plain
+  transcription prompt bundled in Scribe.
+
+Model discovery requires network access, including when using cached transcripts.
 
 ## Create Subtitles with Segmentwright
 
@@ -140,7 +148,7 @@ Usage: `segmentwright-scribe INPUT OUTPUT [OPTIONS]`.
 | --- | --- | --- |
 | `--version` | — | Print the installed package version and exit. No inputs or API key required. |
 | `--language {en,ja}` | `ja` | Language hint sent to the ASR model. |
-| `--model MODEL` | `microsoft/mai-transcribe-2` | OpenRouter ASR model ID. |
+| `--model MODEL` | `microsoft/mai-transcribe-2` | OpenRouter audio-input model ID; route discovered automatically. |
 | `--artifacts ARTIFACTS` | `artifacts/<input-stem>-<timestamp>` | Directory for run artifacts. |
 | `--env-file ENV_FILE` | `~/.segmentwright-scribe/.env` | Dotenv file used after process environment lookup. |
 | `--openrouter-api-key-env NAME` | `OPENROUTER_API_KEY` | Environment variable name containing the OpenRouter API key. |

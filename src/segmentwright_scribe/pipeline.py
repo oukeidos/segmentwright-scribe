@@ -158,6 +158,9 @@ def transcribe_chunks(
     cache: TranscriptCache,
     transcriber: OpenRouterTranscriber,
 ) -> list[dict[str, Any]]:
+    route = transcriber.resolve_model(config.model, config.timeout_sec or 60.0)
+    profile = transcriber.request_profile(config.model, config.language, config.timeout_sec or 60.0)
+    write_json(config.artifacts_dir / "model_route.json", route)
     output: list[dict[str, Any]] = []
     calls_dir = config.artifacts_dir / "openrouter_calls"
     calls_dir.mkdir(parents=True, exist_ok=True)
@@ -173,6 +176,7 @@ def transcribe_chunks(
             chunk_audio_hash=audio_hash,
             model=config.model,
             language=config.language,
+            request_profile=profile,
         )
         cached = cache.load(key) if config.cache_enabled else None
         call_path = calls_dir / f"{public_id}.json"
@@ -225,6 +229,8 @@ def transcribe_chunks(
                     },
                 )
                 call_artifact["cache_path"] = str(cache_path)
+        call_artifact["request"]["endpoint"] = route["endpoint"]
+        call_artifact["request"]["request_profile"] = profile
         write_json(call_path, call_artifact)
         output.append(
             {

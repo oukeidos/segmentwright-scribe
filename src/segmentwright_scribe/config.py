@@ -93,7 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_LANGUAGE,
         help="Language hint sent to the ASR model.",
     )
-    optional.add_argument("--model", default=DEFAULT_MODEL, help="OpenRouter ASR model id.")
+    optional.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="OpenRouter audio-input model id; endpoint discovered from server metadata.",
+    )
     optional.add_argument(
         "--artifacts",
         type=Path,
@@ -188,8 +192,10 @@ def build_parser() -> argparse.ArgumentParser:
 def build_config(args: argparse.Namespace, *, now: datetime | None = None) -> AppConfig:
     input_path = normalize_path(args.input)
     output_path = normalize_path(args.output)
-    artifacts_dir = normalize_path(args.artifacts) if args.artifacts else default_artifacts_dir(
-        input_path, now=now
+    artifacts_dir = (
+        normalize_path(args.artifacts)
+        if args.artifacts
+        else default_artifacts_dir(input_path, now=now)
     )
     cache_dir = normalize_path(args.cache_dir) if args.cache_dir else artifacts_dir / "cache"
     config = AppConfig(

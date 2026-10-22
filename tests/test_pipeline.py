@@ -116,6 +116,12 @@ class FakeTranscriber:
     def __init__(self) -> None:
         self.requests: list[Any] = []
 
+    def resolve_model(self, model, timeout_sec):
+        return {"endpoint": "/audio/transcriptions", "model": {"id": model}}
+
+    def request_profile(self, model, language, timeout_sec):
+        return "test-profile"
+
     def transcribe(self, request: Any) -> AsrResult:
         self.requests.append(request)
         return AsrResult(
