@@ -8,15 +8,36 @@ from typing import Any
 
 from .cache import TranscriptCache, TranscriptCacheKey
 from .chunking import ChunkPlannerConfig, PlannedChunk, plan_chunks
-from .config import AppConfig, resolve_openrouter_api_key
+from .config import AppConfig, resolve_openrouter_api_key, validate_config
 from .media import hash_file, normalize_to_wav, probe_duration, require_ffmpeg, split_wav
 from .model_download import ensure_firered_vad_model
 from .openrouter import AsrRequest, OpenRouterTranscriber
 from .transcript_chunks import validate_transcript_chunks_payload, write_transcript_chunks
 from .vad import FireRedVadBackend
+from .workdir import cleanup_stale_temp_workdirs, temporary_artifacts_dir
 
 
 def run_pipeline(config: AppConfig) -> None:
+    protected = [config.input_path, config.output_path, config.firered_vad_model_dir]
+    if config.artifacts_explicit:
+        protected.append(config.artifacts_dir)
+    if config.cache_explicit:
+        protected.append(config.cache_dir)
+    cleanup_stale_temp_workdirs(protected_paths=tuple(protected))
+    if config.artifacts_explicit:
+        _run_with_artifacts(config)
+        return
+    with temporary_artifacts_dir() as artifacts_dir:
+        runtime_config = replace(
+            config,
+            artifacts_dir=artifacts_dir,
+            cache_dir=config.cache_dir if config.cache_explicit else artifacts_dir / "cache",
+        )
+        validate_config(runtime_config)
+        _run_with_artifacts(runtime_config)
+
+
+def _run_with_artifacts(config: AppConfig) -> None:
     config.artifacts_dir.mkdir(parents=True, exist_ok=True)
     config.output_path.parent.mkdir(parents=True, exist_ok=True)
     stale_error = config.artifacts_dir / "errors.json"
@@ -119,7 +140,7 @@ def _run_pipeline(config: AppConfig) -> None:
         "preset": config.preset,
         "source_id": source_id,
         "input_path": str(config.input_path),
-        "artifacts_dir": str(config.artifacts_dir),
+        "artifacts_dir": str(config.artifacts_dir) if config.artifacts_explicit else None,
     }
     payload = write_transcript_chunks(
         config.output_path,
@@ -248,7 +269,10 @@ def transcribe_chunks(
                 "metadata": {
                     "model": config.model,
                     "preset": config.preset,
-                    "call_artifact": str(call_path.relative_to(config.artifacts_dir)),
+                    "call_artifact": (
+                        str(call_path.relative_to(config.artifacts_dir))
+                        if config.artifacts_explicit else None
+                    ),
                     "cache_hit": cached is not None,
                     "planner_chunk_id": chunk.chunk_id,
                 },

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import tempfile
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -53,6 +55,8 @@ class AppConfig:
     overwrite: bool
     verbose: bool
     preset: str | None = None
+    artifacts_explicit: bool = True
+    cache_explicit: bool = False
 
 
 class ListPresetsAction(argparse.Action):
@@ -119,7 +123,8 @@ def build_parser() -> argparse.ArgumentParser:
     optional.add_argument(
         "--artifacts",
         type=Path,
-        help="Directory for run artifacts; omitted means artifacts/<input-stem>-<timestamp>.",
+        help=("Preserve run artifacts at this path; omitted uses a temporary directory "
+              "deleted after the run."),
     )
     optional.add_argument(
         "--env-file",
@@ -187,7 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
     optional.add_argument(
         "--cache-dir",
         type=Path,
-        help="Transcript cache directory; omitted means <artifacts>/cache.",
+        help="Preserve transcript cache at this path; omitted means <artifacts>/cache.",
     )
     optional.add_argument(
         "--no-cache",
@@ -225,6 +230,8 @@ def build_config(args: argparse.Namespace, *, now: datetime | None = None) -> Ap
         input_path=input_path,
         output_path=output_path,
         artifacts_dir=artifacts_dir,
+        artifacts_explicit=args.artifacts is not None,
+        cache_explicit=args.cache_dir is not None,
         env_file=normalize_path(args.env_file),
         language=args.language,
         model=PRESETS[preset].model
@@ -260,7 +267,9 @@ def normalize_path(path: Path) -> Path:
 def default_artifacts_dir(input_path: Path, now: datetime | None = None) -> Path:
     stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
     stem = input_path.stem or "input"
-    return normalize_path(Path("artifacts") / f"{stem}-{stamp}")
+    return normalize_path(
+        Path(tempfile.gettempdir()) / f"segmentwright-scribe-{stem}-{stamp}-{uuid.uuid4().hex}"
+    )
 
 
 def validate_config(config: AppConfig) -> None:

@@ -52,7 +52,9 @@ def test_build_config_applies_defaults(tmp_path: Path) -> None:
     assert config.language == "ja"
     assert config.model == "microsoft/mai-transcribe-2"
     assert config.openrouter_api_key_env == "OPENROUTER_API_KEY"
-    assert config.artifacts_dir.name == "input-20260627-010203"
+    assert config.artifacts_dir.name.startswith("segmentwright-scribe-input-20260627-010203-")
+    assert not config.artifacts_explicit
+    assert not config.artifacts_dir.exists()
     assert config.cache_dir == config.artifacts_dir / "cache"
 
 

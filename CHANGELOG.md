@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.1] - 2026-10-23
+
+- Made intermediate files temporary by default with cleanup after each run and next-run cleanup of app-marked temporary folders older than 24 hours, while preserving explicitly selected artifact/cache paths and VAD models.
+
 ## [0.2.0] - 2026-10-22
 
 - Added `--preset` and `--list-presets` with MAI-Transcribe 2, Scribe v2, and Qwen 3.8 Omni Flash presets for improved line breaks.

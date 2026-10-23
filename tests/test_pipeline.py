@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from segmentwright_scribe.cache import TranscriptCache
 from segmentwright_scribe.chunking import PlannedChunk
 from segmentwright_scribe.config import build_config
@@ -40,8 +42,11 @@ def make_config(tmp_path: Path):
     return build_config(args, now=datetime(2026, 6, 27, 1, 2, 3))
 
 
-def test_transcribe_chunks_writes_call_artifact_and_output_chunk(tmp_path: Path) -> None:
-    config = make_config(tmp_path)
+@pytest.mark.parametrize("preserve", [False, True])
+def test_transcribe_chunks_writes_call_artifact_and_output_chunk(tmp_path: Path, preserve) -> None:
+    from dataclasses import replace
+
+    config = replace(make_config(tmp_path), artifacts_explicit=preserve)
     audio_path = tmp_path / "chunk.wav"
     audio_path.write_bytes(b"audio")
     chunk = PlannedChunk(
@@ -81,7 +86,7 @@ def test_transcribe_chunks_writes_call_artifact_and_output_chunk(tmp_path: Path)
             "metadata": {
                 "model": "microsoft/mai-transcribe-2",
                 "preset": None,
-                "call_artifact": "openrouter_calls/chunk_0001.json",
+                "call_artifact": "openrouter_calls/chunk_0001.json" if preserve else None,
                 "cache_hit": False,
                 "planner_chunk_id": "1",
             },
@@ -133,3 +138,57 @@ class FakeTranscriber:
             attempts=1,
             status_code=200,
         )
+
+
+@pytest.mark.parametrize("failure", [None, RuntimeError, KeyboardInterrupt])
+@pytest.mark.parametrize("preserve_artifacts", [False, True])
+@pytest.mark.parametrize("preserve_cache", [False, True])
+def test_work_file_lifecycle(tmp_path, monkeypatch, failure, preserve_artifacts, preserve_cache):
+    from dataclasses import replace
+
+    import segmentwright_scribe.pipeline as pipeline
+
+    config = make_config(tmp_path)
+    config = replace(
+        config,
+        artifacts_explicit=preserve_artifacts,
+        cache_explicit=preserve_cache,
+        cache_dir=tmp_path / "external-cache" if preserve_cache else config.cache_dir,
+    )
+    config.firered_vad_model_dir.mkdir(parents=True)
+    model = config.firered_vad_model_dir / "model.pth.tar"
+    model.write_bytes(b"model")
+    seen = []
+
+    def fake_run(runtime):
+        seen.append(runtime)
+        (runtime.artifacts_dir / "source.wav").write_bytes(b"audio")
+        runtime.cache_dir.mkdir(parents=True, exist_ok=True)
+        (runtime.cache_dir / "cached.json").write_text("{}")
+        if failure:
+            raise failure("interrupted")
+        runtime.output_path.write_text("{}")
+
+    cleanup_calls = []
+    monkeypatch.setattr(
+        pipeline, "cleanup_stale_temp_workdirs",
+        lambda **kwargs: cleanup_calls.append(kwargs),
+    )
+    monkeypatch.setattr(pipeline, "_run_pipeline", fake_run)
+    if failure:
+        with pytest.raises(failure):
+            pipeline.run_pipeline(config)
+    else:
+        pipeline.run_pipeline(config)
+        assert config.output_path.read_text() == "{}"
+    assert len(cleanup_calls) == 1
+    protected = cleanup_calls[0]["protected_paths"]
+    assert (config.artifacts_dir in protected) == preserve_artifacts
+    assert (config.cache_dir in protected) == preserve_cache
+    runtime = seen[0]
+    assert runtime.artifacts_dir.exists() == preserve_artifacts
+    assert (runtime.cache_dir / "cached.json").exists() == (preserve_artifacts or preserve_cache)
+    assert model.read_bytes() == b"model"
+    assert config.input_path.read_bytes() == b"wav"
+    if preserve_artifacts and failure is RuntimeError:
+        assert (runtime.artifacts_dir / "errors.json").exists()

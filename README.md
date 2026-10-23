@@ -69,7 +69,8 @@ uv run segmentwright-scribe input.mp4 runs/example/transcript_chunks.json \
   --verbose
 ```
 
-Cache is enabled by default. Reuse the same `--cache-dir` across runs to reuse
+Cache is enabled by default and is temporary unless `--artifacts` or `--cache-dir`
+is specified. Reuse the same `--cache-dir` across runs to reuse
 cached transcripts, or add `--no-cache` to request fresh transcriptions.
 
 Use `--model MODEL_ID` to choose an OpenRouter audio-input model. Scribe checks
@@ -138,7 +139,19 @@ Transcription runs remotely on OpenRouter.
 ## Outputs
 
 The requested output uses the `segmentwright.transcript_chunks.v1` schema.
-Diagnostics go to `artifacts/<input-stem>-<timestamp>` unless you set `--artifacts`:
+By default, intermediate audio, diagnostic JSON, and transcript cache are created
+in a system temporary directory and deleted after success, failure, or Ctrl+C.
+Only the requested output JSON remains; downloaded VAD models remain available
+for reuse. Use `--artifacts PATH` to preserve work files at that path, or
+`--cache-dir PATH` to preserve only the transcript cache. Temporary artifact paths
+are recorded as `null` in the final JSON. Forced termination (such as SIGKILL) or
+power loss can leave temporary files behind. On the next run, app-marked temporary
+directories created at least 24 hours ago are removed from the system temporary
+directory. Age is measured from the creation timestamp stored in the marker, not
+file modification times. Unmarked directories, symlinks, and explicitly selected
+artifact/cache paths are excluded.
+
+The work directory contains:
 
 | File or directory | Contents |
 | --- | --- |
@@ -167,7 +180,7 @@ Usage: `segmentwright-scribe INPUT OUTPUT [OPTIONS]`.
 | `--preset PRESET` | None | Model-specific transcription options and line formatting; excludes `--model`. |
 | `--list-presets` | — | List available presets and exit. |
 | `--model MODEL` | `microsoft/mai-transcribe-2` | OpenRouter audio-input model ID; route discovered automatically. |
-| `--artifacts ARTIFACTS` | `artifacts/<input-stem>-<timestamp>` | Directory for run artifacts. |
+| `--artifacts ARTIFACTS` | Temporary directory, deleted after the run | Preserve run artifacts at this path. |
 | `--env-file ENV_FILE` | `~/.segmentwright-scribe/.env` | Dotenv file used after process environment lookup. |
 | `--openrouter-api-key-env NAME` | `OPENROUTER_API_KEY` | Environment variable name containing the OpenRouter API key. |
 | `--openrouter-base-url URL` | `https://openrouter.ai/api/v1` | OpenRouter API base URL. |
