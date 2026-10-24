@@ -78,7 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Credential default: the API key is read from the environment variable named by "
             "--openrouter-api-key-env. If it is not in the process environment, the same name is "
-            "looked up in --env-file."
+            "looked up in --env-file. The local preset needs no API key. "
+            "Optional local setup: segmentwright-scribe local install; "
+            "diagnostics: segmentwright-scribe local doctor."
         ),
     )
     required = parser.add_argument_group("required positional arguments")
@@ -123,8 +125,10 @@ def build_parser() -> argparse.ArgumentParser:
     optional.add_argument(
         "--artifacts",
         type=Path,
-        help=("Preserve run artifacts at this path; omitted uses a temporary directory "
-              "deleted after the run."),
+        help=(
+            "Preserve run artifacts at this path; omitted uses a temporary directory "
+            "deleted after the run."
+        ),
     )
     optional.add_argument(
         "--env-file",
@@ -312,6 +316,15 @@ def validate_config(config: AppConfig) -> None:
 
 
 def validate_path_collisions(config: AppConfig) -> None:
+    if config.preset == "local":
+        from .local.runtime import home
+
+        root = home()
+        for path in (config.input_path, config.output_path, config.artifacts_dir, config.cache_dir):
+            resolved = path.resolve()
+            if resolved.is_relative_to(root) or root.is_relative_to(resolved):
+                raise ConfigError("Job paths must not overlap the local runtime directory")
+
     input_path = config.input_path
     output_path = config.output_path
     artifacts_dir = config.artifacts_dir

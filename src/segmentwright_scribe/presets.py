@@ -17,6 +17,13 @@ class Preset:
 
 
 PRESETS = {
+    "local": Preset(
+        model="local/granite-qwen",
+        description="Offline Granite transcription with one Qwen repair pass (beta)",
+        output_version="local-transcript-v1",
+        request_options={},
+        output_mode="local",
+    ),
     "qwen-3.8-omni-flash": Preset(
         model="qwen/qwen3.8-omni-flash",
         description="Subtitle lines as JSON strings; preserve returned text and line breaks",

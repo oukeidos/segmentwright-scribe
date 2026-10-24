@@ -59,6 +59,11 @@ def _run_with_artifacts(config: AppConfig) -> None:
 
 
 def _run_pipeline(config: AppConfig) -> None:
+    if config.preset == "local":
+        from .local.pipeline import run as run_local
+
+        run_local(config)
+        return
     require_ffmpeg()
     api_key = resolve_openrouter_api_key(config)
     model_dir = ensure_firered_vad_model(

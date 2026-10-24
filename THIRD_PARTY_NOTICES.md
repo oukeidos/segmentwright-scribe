@@ -72,3 +72,12 @@ their own notices as well.
 When distributing dependency packages or binaries with Segmentwright Scribe,
 retain the applicable copyright notices, complete license texts, and notice
 files from those exact distributions. This inventory does not replace them.
+
+## Optional local workers
+
+The optional local installer uses separately resolved dependencies and model
+weights; they are not bundled into the base Scribe environment. Granite Speech
+5.0 TurboCTC (IBM), Qwen3-ASR and Qwen3-ForcedAligner (Qwen), and FireRedVAD retain
+their upstream licenses and model documentation. The installer records fixed
+model revisions and file hashes and downloads available model cards/license
+files. Consult those files and the worker lock files for the installed components.

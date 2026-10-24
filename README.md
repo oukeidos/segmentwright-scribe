@@ -231,3 +231,58 @@ Copyright (c) 2026 oukeidos.
 
 Third-party dependencies, model files, and external tools retain their own
 licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Optional local transcription (beta)
+
+The local preset transcribes audio in three stages:
+
+1. **FireRedVAD** detects speech regions, and **Granite Speech 5.0 470M TurboCTC** produces the initial transcript.
+2. **Qwen3-ASR-1.7B** transcribes selected speech gaps left by Granite, using nearby recognized words to locate repair boundaries.
+3. **Qwen3-ForcedAligner-0.6B** aligns the repair text to the audio; boundary and duplication checks determine which insertions to keep.
+
+The result combines Granite's transcript with accepted Qwen repairs in chunks
+timed to the original source. Qwen processes selected gaps, not the entire video.
+
+Existing cloud commands, presets, help and tests work without local workers. The
+base installation does not include Granite, Qwen, Transformers or NeMo. The local
+preset does not read an API key, contact OpenRouter, or fall back to a cloud API.
+
+Initial support: Linux x86_64, Python 3.12 worker environments and an NVIDIA GPU
+with a driver compatible with the pinned CUDA-enabled PyTorch wheels. `uv`,
+`ffmpeg` and `ffprobe` must be available. Installation downloads two isolated
+Python environments and several GB of fixed-revision models. It does not modify
+other Python environments or install GPU drivers.
+
+```bash
+segmentwright-scribe local install
+segmentwright-scribe local doctor
+segmentwright-scribe input.mp4 transcript.json --language ja --preset local
+```
+
+`install` requires network access for missing packages and models. It activates a
+new installation only after dependency imports and a CUDA computation succeed;
+failed-install logs remain available and the previous active environment is kept.
+`doctor` checks model and worker hashes, dependencies, ffmpeg and CUDA without
+network access. Transcription runs offline and never installs dependencies. After
+an update that changes the runtime profile, run `local install` again.
+
+Workers and model weights are stored under
+`$XDG_DATA_HOME/segmentwright-scribe/local` (default
+`~/.local/share/segmentwright-scribe/local`). Set
+`SEGMENTWRIGHT_SCRIBE_LOCAL_HOME` to override this location. Audio, transcripts and
+job logs retain the normal temporary-work policy: use `--artifacts` to keep them
+and `--cache-dir` to persist the independently versioned local transcript cache.
+Do not put input, output, artifacts or transcript caches inside the runtime tree.
+
+The fixed beta policy uses 16 kHz mono audio, CPU FireRedVAD, Granite 60-second
+cores with 10-second context, and one Qwen recognition/alignment pass on anchored
+speech gaps. Models run sequentially; no denoising, speed changes, repeated
+recognition or independent verifier is used. The core chunk duration is fixed;
+cloud planner flags and request retry settings do not tune this preset. `--device
+cpu` is unsupported; `--timeout-sec` bounds each worker (default 3600 seconds).
+The preset uses its installed fixed-revision VAD, not the cloud VAD directory.
+
+The output is `segmentwright.transcript_chunks.v1`, with original source times.
+Gemma resegmentation and final subtitle alignment remain downstream Segmentwright
+features. Local output is a reviewable draft: missed dialogue, wrong words and
+imperfect repair boundaries remain possible. The default cloud model is unchanged.

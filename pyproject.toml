@@ -1,6 +1,6 @@
 [project]
 name = "segmentwright-scribe"
-version = "0.2.1"
+version = "0.3.0"
 description = "Generate Segmentwright-compatible transcript chunk JSON through OpenRouter ASR."
 readme = "README.md"
 authors = [{name = "oukeidos"}]
@@ -41,3 +41,6 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+"segmentwright_scribe.local" = ["*.lock", "*.in"]

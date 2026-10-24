@@ -8,6 +8,11 @@ from .pipeline import run_pipeline
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "local":
+        from .local.runtime import main as local_main
+
+        return local_main(argv[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
     verbose = bool(getattr(args, "verbose", False))
